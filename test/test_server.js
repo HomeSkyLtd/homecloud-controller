@@ -1,5 +1,8 @@
 var WebSocketServer = require('websocket').server;
 var http = require('http');
+var express = require('express');
+var app = express();
+var bodyParser = require('body-parser');
  
 
 var WEBSOCKET_PORT = 8092;
@@ -22,7 +25,7 @@ wsServer = new WebSocketServer({
     // facilities built into the protocol and the browser.  You should 
     // *always* verify the connection's origin and decide whether or not 
     // to accept it. 
-    autoAcceptConnections: false
+    autoAcceptConnections: true
 });
  
 function originIsAllowed(origin) {
@@ -38,27 +41,28 @@ wsServer.on('request', function(request) {
       return;
     }
     
-    var connection = request.accept('echo-protocol', request.origin);
+    var connection = request.accept();
     console.log((new Date()) + ' Connection accepted.');
     connection.on('message', function(message) {
-        if (message.type === 'utf8') {
-            console.log('Received Message: ' + message.utf8Data);
-            connection.sendUTF(message.utf8Data);
-        }
-        else if (message.type === 'binary') {
-            console.log('Received Binary Message of ' + message.binaryData.length + ' bytes');
-            connection.sendBytes(message.binaryData);
-        }
+        console.log("Server received message");
+        console.log(message);
     });
+    connection.sendUTF(JSON.stringify({notification: "newAction"}));
     connection.on('close', function(reasonCode, description) {
         console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
     });
 });
 
 
-//Creates http server now
-http.createServer( (req, res) => {
-    console.log("REQUEST");
-}).listen(HTTP_PORT, '127.0.0.1', () => {
+
+app.use(bodyParser.json());      
+app.use(bodyParser.urlencoded({extended: true }));
+
+
+app.post('/', function (req, res) {
+    res.json({status: 200});
+});
+
+app.listen(HTTP_PORT, function () {
     console.log((new Date()) + ' HTTP Server is listening on port ' + HTTP_PORT);
 });

@@ -33,9 +33,10 @@
   "devDependencies": {
     "mocha": "^2.4.5",
     "should": "^8.3.0",
-    "restify": "^4.1.1"
+    "express": "^4.14.0",
+    "body-parser": "^1.15.2"
   },
-  "dependencies": {
+  "dependencies": {    
     "request": "^2.74.0",
     "websocket": "^1.0.23"
   }
