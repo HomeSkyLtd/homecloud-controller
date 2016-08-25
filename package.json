@@ -1,0 +1,42 @@
+{
+  "name": "homecloud-controller",
+  "version": "1.0.0",
+  "description": "API for the controller communication with the cloud server using the homecloud protocol",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "contributors": [
+    {
+      "name": "Ricardo Boccoli Gallego",
+      "email": "ricardo.gallego93@gmail.com"
+    },
+    {
+      "name": "Henrique Rodrigues",
+      "email": "henriqrodrigues@gmail.com"
+    },
+    {
+      "name": "Fabio Tsuyoshi Muramatsu",
+      "email": "ftmtsuyoshi@gmail.com"
+    }
+  ],
+  "repository": "https://github.com/HomeSkyLtd/homecloud-controller",
+  "keywords": [
+    "home",
+    "automation",
+    "controller",
+    "homesky",
+    "homecloud",
+    "API"
+  ],
+  "license": "ISC",
+  "devDependencies": {
+    "mocha": "^2.4.5",
+    "should": "^8.3.0",
+    "restify": "^4.1.1"
+  },
+  "dependencies": {
+    "request": "^2.74.0",
+    "websocket": "^1.0.23"
+  }
+}
