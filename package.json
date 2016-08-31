@@ -36,7 +36,8 @@
     "express": "^4.14.0",
     "body-parser": "^1.15.2"
   },
-  "dependencies": {    
+  "dependencies": {
+    "merge": "^1.2.0",
     "request": "^2.74.0",
     "websocket": "^1.0.23"
   }
