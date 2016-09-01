@@ -3,7 +3,7 @@
 var WebSocketClient = require('websocket').client;
 var request = require('request');
 var merge = require('merge');
-
+var Enum = require('enum');
 /*
     options is in the format:
     {
@@ -20,17 +20,24 @@ var merge = require('merge');
 
 const DEFAULT_OPTIONS = {
     websocket: {
-        retryConnectionTime: 5000  
+        retryConnectionTime: 500  
     },
-    retryMessageTime: 5000
+    retryMessageTime: 1000
 };
+
+const ConnectionState = new Enum(['WaitingLogin', 'LoggedIn', 'WaitingTimeout', 
+    'NotConnected', 'CantLogin']);
+const WebsocketState = new Enum(['Disabled', 'WaitingTimeout', 'WaitingResponse', 'Connected',
+                'NotConnected', 'FirstTry']);
 
 function Homecloud(options) {
     //Set internal variables
     this._options = merge.recursive(DEFAULT_OPTIONS, options);
-    this._connected = false;
-    this._webSocketConnected = false;
-    this._webSocketTimer = false;
+    this._connectionState = ConnectionState.NotConnected;
+    if (this._options.websocket.address)
+        this._websocketState = WebsocketState.FirstTry;
+    else
+        this._websocketState = WebsocketState.Disabled;
     this._msgQueue = [];
     this._notifications = {
         newAction: {
@@ -76,6 +83,9 @@ Homecloud.prototype._sendHttpMessage = function(msg, onSend, onError) {
 };
 
 Homecloud.prototype._login = function() {
+    if (this._connectionState != ConnectionState.NotConnected)
+        return;
+    this._connectionState = ConnectionState.WaitingLogin;
     console.log("[LOGIN] Sending login message");
     this._sendHttpMessage({
         function: "login",
@@ -84,17 +94,19 @@ Homecloud.prototype._login = function() {
     }, (data, response) => {
         if (data.status !== 200) {
             console.log("[LOGIN] Login error: '" +
-                data.errorMessage + "' (status " + data.status + ")");
+                (data.errorMessage ? data.errorMessage : '') + "' (status " + data.status + ")");
+            this._connectionState = ConnectionState.CantLogin;
         }
         else {
             console.log("[LOGIN] Logged in");
-            this._connected = true;
+            this._connectionState = ConnectionState.LoggedIn;
             //Send stored messages
             this._sendStoredMessages();
             //Connect websocket
             this._connectWebSocket();
         }
     }, (err, response) => {
+        this._connectionState = ConnectionState.WaitingTimeout;
         if (err !== null) {
             //Connection error: try later
             //Maybe there is no internet
@@ -105,9 +117,76 @@ Homecloud.prototype._login = function() {
             //Like 500 or 404
             console.log("[LOGIN] Couldn't login: Got status " + response.statusCode);
         }
+        //Will try again
         console.log("[LOGIN] Will retry in " + this._options.retryMessageTime + "ms");
-        setTimeout(this._login, this._options.retryMessageTime);
+        setTimeout(() => {
+            this._connectionState = ConnectionState.NotConnected;
+            this._login();
+        }, this._options.retryMessageTime);
     });
+};
+
+Homecloud.prototype._connectWebSocket = function () {
+    //Don't try to connect if client doesn't want
+    //websocket or is connected or is not logged in or is waiting socket response
+    if (this._websocketState != WebsocketState.NotConnected &&
+        this._websocketState != WebsocketState.FirstTry) {    
+        //Tried to connect when disabled
+        //Or when is waitinig for response or waiting timeout
+        return;
+    }
+
+    if (this._connectionState != ConnectionState.LoggedIn) {
+        //Trying to connect websocket without login
+        //Won't set timeout, it will retry when logged in
+        return;
+    }
+
+    if (this._websocketState == WebsocketState.FirstTry) {
+        //Reconnect function
+        var reconnect = () => {
+            this._websocketState = WebsocketState.WaitingTimeout;
+            setTimeout(() => {
+                this._websocketState = WebsocketState.NotConnected;
+                this._connectWebSocket();
+            }, this._options.websocket.retryConnectionTime);
+        };
+
+        this._websocketState = WebsocketState.NotConnected;
+        //Configure webscoket
+        this._websocket = new WebSocketClient({});
+        this._websocket.on('connectFailed', (error) => {
+            console.log('[WEBSOCKET CONN] Error in connection: ');
+            console.log(error);
+            console.log('[WEBSOCKET CONN] Will retry connection in ' +
+                this._options.websocket.retryConnectionTime + "ms");
+            //Try to reconnect
+            reconnect();
+
+        });
+        this._websocket.on('connect', (connection) => {
+            //Conected!
+            console.log('[WEBSOCKET CONN] Connected!');
+            this._websocketState = WebsocketState.Connected;
+            
+            connection.on('error', (error) => {
+                console.log("[WEBSOCKET CONN] Connection Error: ");
+                console.log(error);
+                reconnect();
+            });
+            connection.on('close', () => {
+                console.log("[WEBSOCKET CONN] Connection Closed: ");
+                reconnect();
+            });
+            connection.on('message', (message) => {
+                console.log("[WEBSOCKET CONN] Got Message");
+                console.log(message);
+            });
+        });
+    }
+    this._websocketState = WebsocketState.WaitingResponse;
+    this._websocket.connect(this._options.websocket.address, null, null, 
+        { Cookie: "ring-session=1e69aafd-5710-4282-9e03-443359a14dc5" });
 };
 
 //Send message using user login
@@ -118,53 +197,6 @@ Homecloud.prototype._sendMessage = function () {
 Homecloud.prototype._sendStoredMessages = function () {
 
 };
-
-Homecloud.prototype._connectWebSocket = function () {
-    //Don't try to connect if client doesn't want
-    //websocket or is connected or is not logged in or is waiting socket response
-    if (!this._options.websocket.address || 
-        !this._connected || this._webSocketConnected ||
-        this._webSocketWaiting)
-        return;
-
-    if (this._triedWebSocketConnection && this._options.websocket.address) {
-        this._triedWebSocketConnection = true;
-        //Configure webscoket
-        this._websocket = new WebSocketClient({});
-        websocket.on('connectFailed', function(error) {
-            console.log('[WEBSOCKET CONN] Error: ');
-            console.log(error);
-            this._webSocketConnected = false;
-            this._webSocketTimer = true;
-            this._webSocketWaiting = false;
-            setTimeout(this._connect, this._options.retryWebSocketTime);
-        });
-        websocket.on('connect', function(connection) {
-            //Conected!
-            this._webSocketConnected = true;
-            this._webSocketWaiting = false;
-            console.log('WebSocket Client Connected');
-            connection.on('error', function(error) {
-                console.log("Connection Error: " + error.toString());
-            });
-            connection.on('close', function() {
-                console.log('echo-protocol Connection Closed');
-            });
-            connection.on('message', function(message) {
-                console.log("RECEIVED MESSAGE");
-                console.log(message);
-            });
-        });
-    }
-    //Ended timer
-    this._webSocketTimer = false;
-    //Websocket is waiting
-    this._webSocketWaiting = true;
-    websocket.connect(this._options.websocket.address, null, null, 
-        { Cookie: "ring-session=1e69aafd-5710-4282-9e03-443359a14dc5" });
-};
-
-
 
 Homecloud.prototype.newData = function (dataArray, onSend) {
 	sendHttpMessage(this._httpServer, {

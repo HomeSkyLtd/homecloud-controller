@@ -15,10 +15,9 @@ const testOptions = {
 };
 
 describe('Homecloud', function() {
-    var driver1, driver2;
 
     before('Instanciation of Server', (done) => {
-       testServer.createServer(done);
+        testServer.createServer(done);
     });
 
     describe('#send()', () => {

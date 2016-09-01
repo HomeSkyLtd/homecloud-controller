@@ -52,18 +52,16 @@ app.use(bodyParser.urlencoded({extended: true }));
 
 
 app.post('/', function (req, res) {
-    console.log("Received message!");
-    console.log(JSON.parse(req.body.payload));
-    res.json({status: 200});
+    console.log("[HTTP SERVER] Received message: " + req.body.payload);
+    var val = JSON.parse(req.body.payload);
+    res.json({status: 404});
 });
 
 
 
 exports.createServer = function(callback) {
-    callback();
-    return;
     app.listen(HTTP_PORT, function () {
-        console.log((new Date()) + ' HTTP Server is listening on port ' + HTTP_PORT);
+        console.log('[HTTP SERVER] Listening on port ' + HTTP_PORT);
         callback();
     });
 };

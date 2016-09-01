@@ -37,6 +37,7 @@
     "body-parser": "^1.15.2"
   },
   "dependencies": {
+    "enum": "^2.3.0",
     "merge": "^1.2.0",
     "request": "^2.74.0",
     "websocket": "^1.0.23"
