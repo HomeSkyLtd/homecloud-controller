@@ -23,6 +23,8 @@ describe('Homecloud', function() {
     describe('#send()', () => {
         it('should execute without error', (done) => {
             var home = new Homecloud(testOptions);
+            home.onAction((msg) => {console.log("GOT ACTION!")})
+                .newData([1,2,3]);
             //done();
         });
     });
