@@ -19,6 +19,7 @@ var Enum = require('enum');
     }
 */
 
+/* Default options of the constructor */
 const DEFAULT_OPTIONS = {
     websocket: {
         retryConnectionTime: 5000  
@@ -33,6 +34,11 @@ const ConnectionState = new Enum(['WaitingLogin', 'LoggedIn', 'WaitingTimeout',
 const WebsocketState = new Enum(['Disabled', 'WaitingTimeout', 'WaitingResponse', 'Connected',
                 'NotConnected', 'FirstTry']);
 
+
+/**
+    @class
+    @param {Object} options - Server and controller configurations
+*/
 function Homecloud(options) {
     //Set internal variables
     this._options = merge.recursive(DEFAULT_OPTIONS, options);
@@ -49,6 +55,10 @@ function Homecloud(options) {
     //Connect
     this._login();
 }
+
+/*
+    INTERNAL FUNCTIONS
+*/
 
 /* Just send a message without queueing, req contains options (with stuff like url,
 jar, headers, etc and body, containing the json object to send in the payload*/
@@ -72,6 +82,7 @@ Homecloud.prototype._sendRawMessage = function(req, onSend, onError) {
     });
 };
 
+/* Login in the server */
 Homecloud.prototype._login = function() {
     if (this._connectionState != ConnectionState.NotConnected)
         return;
@@ -90,8 +101,6 @@ Homecloud.prototype._login = function() {
             password: this._options.password
         }
     }, (data, response) => {
-        //console.log(data);
-        //console.log(response);
         if (data.status !== 200) {
             console.log("[LOGIN] Login error: '" +
                 (data.errorMessage ? data.errorMessage : '') + "' (status " + data.status + ")");
@@ -126,6 +135,7 @@ Homecloud.prototype._login = function() {
     });
 };
 
+/* Connect to the websocket of the server (if any) */
 Homecloud.prototype._connectWebSocket = function () {
     //Don't try to connect if client doesn't want
     //websocket or is connected or is not logged in or is waiting socket response
@@ -191,25 +201,30 @@ Homecloud.prototype._connectWebSocket = function () {
         { Cookie: this._cookiesJar.getCookieString(this._options.address)});
 };
 
-//Send message using user login
-Homecloud.prototype._sendMessage = function (message, onSend, onError) {
+/* Send message with queueing when needed */
+Homecloud.prototype._sendMessage = function (message, events) {
+    if (!events)
+        events = {};
     if (this._connectionState != ConnectionState.LoggedIn) {
         //Not logged in! Store message
         this._msgQueue.push({
             message: message,
-            onSend: onSend,
-            onError: onError
+            events: events
         });
+        if (events.onQueue)
+            events.onQueue();
         return;
     }
 
+    //Function to reconnect
     var reconnect = () => {
         console.log('[MESSAGE] Storing message and will login again');
         this._msgQueue.push({
-                    message: message,
-                    onSend: onSend,
-                    onError: onError
+            message: message,
+            events: events
         });
+        if (events.onQueue)
+            events.onQueue();
         if (this._connectionState === ConnectionState.LoggedIn) {
             this._connectionState = ConnectionState.WaitingTimeout;
             setTimeout(() => {
@@ -219,6 +234,7 @@ Homecloud.prototype._sendMessage = function (message, onSend, onError) {
         }
     };
 
+    //Send message
     this._sendRawMessage({
         options: {
             url: this._options.address,
@@ -227,36 +243,37 @@ Homecloud.prototype._sendMessage = function (message, onSend, onError) {
         body: message
     }, (data, response) => {
         if (data.status !== 200) {
-            console.log("[MESSAGE] Non 200 status (" + data.status + ") ");
-            if (data.status === 403) {
-                //No access, possibly logout
+            console.log("[MESSAGE] Non 200 status received (" + data.status + ") ");
+            if (data.status === 403 && data.errorMessage === 'User not logged in') {
+                //Logout
                 reconnect();
             }
             //Server got message but refused, call onError
-            else if (onError)
-                onError(data);
+            else if (events.onError)
+                events.onError(data);
+            
         }
         else {
             console.log("[MESSAGE] Sent Message");
-            if (onSend)
-                onSend(data);
+            if (events.onSend)
+                events.onSend(data);
         }
     }, (err, response) => {
         if (err !== null) {
             console.log("[MESSAGE] Couldn't connect to server");
             reconnect();
         }
-        else if (response.statusCode !== 200) {
+        else {
             console.log("[MESSAGE] Couldn't send message: Got status " + response.statusCode);
             if (response.statusCode === 403)
                 reconnect();
-            else if (onError)
-                onError({status: response.statusCode});
-
+            else if (events.onError)
+                events.onError({status: response.statusCode});
         }
     });
 };
 
+/* Send all stored messages (one after another) */
 Homecloud.prototype._sendStoredMessages = function () {
     
     var msgs = this._msgQueue;
@@ -266,19 +283,34 @@ Homecloud.prototype._sendStoredMessages = function () {
     var recursiveSend = (i) => {
         if (i >= msgs.length)
             return;
-        this._sendMessage(msgs[i].message, (args) => {
-            if (msgs[i].onSend)
-                msgs[i].onSend.apply(this, arguments);
-            recursiveSend(i + 1);
-        }, (args) => {
-            if (msgs[i].onError)
-                msgs[i].onError.apply(this, arguments);
-            recursiveSend(i + 1);
+        this._sendMessage(msgs[i].message, {
+            onSend: () => {
+                if (msgs[i].events.onSend)
+                    msgs[i].onSend.apply(this, arguments);
+                recursiveSend(i + 1);
+            }, 
+            onError: () => {
+                if (msgs[i].events.onError)
+                    msgs[i].events.onError.apply(this, arguments);
+                recursiveSend(i + 1);
+            },
+            onQueue: () => {
+                //Queued message, go to the next
+                recursiveSend(i + 1);
+            } 
         });
     };
     recursiveSend(0);
 };
 
+/* API Functions */
+
+/**
+    Notificates server of new detected nodes
+    @param {Homecloud~Node[]} nodes - List containing new detected nodes
+    @param {Homecloud~OnSend} [onSend] - Callback to call when the message was sent
+    @param {Homecloud~OnError} [onError] - Callback to call when the server rejected the message
+*/
 Homecloud.prototype.newNodes = function(nodes, onSend, onError) {
     this._sendMessage({
         function: "newDetectedNodes",
@@ -287,6 +319,12 @@ Homecloud.prototype.newNodes = function(nodes, onSend, onError) {
     return this;
 };
 
+/**
+    Notificates server of new sensor data
+    @param {Homecloud~Data[]} dataArray - List containing new sensor data
+    @param {Homecloud~OnSend} [onSend] - Callback to call when the message was sent
+    @param {Homecloud~OnError} [onError] - Callback to call when the server rejected the message
+*/
 Homecloud.prototype.newData = function (dataArray, onSend, onError) {
 	this._sendMessage({
 			function: "newData",
@@ -295,6 +333,12 @@ Homecloud.prototype.newData = function (dataArray, onSend, onError) {
     return this;
 };
 
+/**
+    Notificates server of new actuator change (external command or by rules)
+    @param {Homecloud~Data[]} dataArray - List containing executed commands
+    @param {Homecloud~OnSend} [onSend] - Callback to call when the message was sent
+    @param {Homecloud~OnError} [onError] - Callback to call when the server rejected the message
+*/
 Homecloud.prototype.newCommand = function (commandArray, onSend, onError) {
 	this._sendMessage({
 			function: "newCommand",
@@ -303,6 +347,13 @@ Homecloud.prototype.newCommand = function (commandArray, onSend, onError) {
     return this;
 };
 
+/**
+    Notificates server of state change in the node
+    @param {number} nodeId - Id of the node
+    @param {boolean} alive - Indicates if the node is alive (true) or dead (false)
+    @param {Homecloud~OnSend} [onSend] - Callback to call when the message was sent
+    @param {Homecloud~OnError} [onError] - Callback to call when the server rejected the message
+*/
 Homecloud.prototype.setNodeState = function(nodeId, alive, onSend, onError) {
     this._sendMessage({
         function: "setNodeState",
@@ -312,6 +363,13 @@ Homecloud.prototype.setNodeState = function(nodeId, alive, onSend, onError) {
     return this;
 };
 
+/**
+    Notificates server of the result of an action he asked
+    @param {Homecloud~Action} action - The action executed (or not)
+    @param {boolean} result - Indicates if the action was executed (true) or not (false)
+    @param {Homecloud~OnSend} [onSend] - Callback to call when the message was sent
+    @param {Homecloud~OnError} [onError] - Callback to call when the server rejected the message
+*/
 Homecloud.prototype.actionResult = function(action, result, onSend, onError) {
     this._sendMessage({
         function: "actionResult",
@@ -321,6 +379,11 @@ Homecloud.prototype.actionResult = function(action, result, onSend, onError) {
     return this;
 };
 
+/**
+    Gets all the accepted rules in the server
+    @param {Homecloud~OnSend} [onSend] - Callback to call when the message was sent, containing the rules
+    @param {Homecloud~OnError} [onError] - Callback to call when the server rejected the message
+*/
 Homecloud.prototype.getRules = function(onSend, onError) {
     this._sendMessage({
         function: "getRules",
@@ -328,21 +391,37 @@ Homecloud.prototype.getRules = function(onSend, onError) {
     return this;
 };
 
+/**
+    Defines the function to call when there is an action
+    @param {Homecloud~OnAction} callback - Callback to call when server send new action
+*/
 Homecloud.prototype.onAction = function(callback) {
     this._notificationHandlers.newAction = callback;
     return this;
 };
 
+/**
+    Defines the function to call when there is change in rules
+    @param {Homecloud~OnRules} callback - Callback to call when there is change in rules
+*/
 Homecloud.prototype.onRules = function(callback) {
     this._notificationHandlers.newRules = callback;
     return this;
 };
 
+/**
+    Defines the function to call when user accepted (or not) a discovered node
+    @param {Homecloud~OnAccept} callback - Callback to call when a node is accepted (or not)
+*/
 Homecloud.prototype.onAcceptNode = function(callback) {
     this._notificationHandlers.acceptedNode = callback;
     return this;
 };
 
+/**
+    Defines the function to call when a node is removed by the user
+    @param {Homecloud~OnAccept} callback - Callback to call when a node is removed
+*/
 Homecloud.prototype.onRemoveNode = function(callback) {
     this._notificationHandlers.removedNode = callback;
     return this;
