@@ -5,7 +5,7 @@ API for the controller communication with the cloud server using the homecloud p
 For documentation on how to use the API, refer to [this](https://github.com/HomeSkyLtd/homecloud-controller/blob/master/documentation.MD)
 
 ##Usage
-Here's an example, sending a message an listening for a notification:
+Here's an example, sending a message and listening for a notification:
 ```javascript
 var home = new Homecloud({
     username: "login123",
