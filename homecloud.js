@@ -165,7 +165,7 @@ Homecloud.prototype.getRules = function(onSend, onError) {
 
 /**
     Defines the function to call when there is an action
-    @param {Homecloud~OnAction} callback - Callback to call when server send new action
+    @param {Homecloud~OnNotification} callback - Callback to call when server send new action
 */
 Homecloud.prototype.onAction = function(callback) {
     this._notificationHandlers.newAction = callback;
@@ -174,7 +174,7 @@ Homecloud.prototype.onAction = function(callback) {
 
 /**
     Defines the function to call when there is change in rules
-    @param {Homecloud~OnRules} callback - Callback to call when there is change in rules
+    @param {Homecloud~OnNotification} callback - Callback to call when there is change in rules
 */
 Homecloud.prototype.onRules = function(callback) {
     this._notificationHandlers.newRules = callback;
@@ -183,7 +183,7 @@ Homecloud.prototype.onRules = function(callback) {
 
 /**
     Defines the function to call when user accepted (or not) a discovered node
-    @param {Homecloud~OnAccept} callback - Callback to call when a node is accepted (or not)
+    @param {Homecloud~OnNotification} callback - Callback to call when a node is accepted (or not)
 */
 Homecloud.prototype.onAcceptNode = function(callback) {
     this._notificationHandlers.acceptedNode = callback;
@@ -192,7 +192,7 @@ Homecloud.prototype.onAcceptNode = function(callback) {
 
 /**
     Defines the function to call when a node is removed by the user
-    @param {Homecloud~OnAccept} callback - Callback to call when a node is removed
+    @param {Homecloud~OnNotification} callback - Callback to call when a node is removed
 */
 Homecloud.prototype.onRemoveNode = function(callback) {
     this._notificationHandlers.removedNode = callback;
@@ -470,3 +470,15 @@ Homecloud.prototype._sendStoredMessages = function () {
     };
     recursiveSend(0);
 };
+
+/**
+ * Callback used by messages to the server
+ * @callback Homecloud~onSend
+ * @param {Object} data - Json object containing the response from server. It contains at least a status property
+ */
+
+/**
+ * Callback used by notifications from the server
+ * @callback Homecloud~onNotification
+ * @param {Object} data - Json object containing the notification.
+ */
