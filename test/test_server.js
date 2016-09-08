@@ -125,10 +125,10 @@ app.post('/', function (req, res) {
 
 
 var httpServer;
-exports.createServer = function(callback) {
+exports.createServer = function(callback, onConnect) {
     httpServer = app.listen(HTTP_PORT, function () {
         console.log('[HTTP SERVER] Listening on port ' + HTTP_PORT);
-        createWebSocketServer(callback);
+        createWebSocketServer(callback, onConnect);
     });
 };
 

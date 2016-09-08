@@ -3,4 +3,8 @@
 var testServer = require('./test_server');
 
 
-testServer.createServer(() => {});
+testServer.createServer(() => {}, () => {
+    testServer.sendNotification({
+        notification: "newAction"
+    });
+});
