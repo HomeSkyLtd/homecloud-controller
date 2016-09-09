@@ -6,6 +6,7 @@
 * [Homecloud](#Homecloud)
     * [new Homecloud(options)](#new_Homecloud_new)
     * _instance_
+        * [.start()](#Homecloud+start)
         * [.newNodes(nodes, [onSend], [onError])](#Homecloud+newNodes)
         * [.newData(dataArray, [onSend], [onError])](#Homecloud+newData)
         * [.newCommand(dataArray, [onSend], [onError])](#Homecloud+newCommand)
@@ -28,6 +29,13 @@
 | --- | --- | --- |
 | options | <code>Object</code> | Server and controller configurations |
 
+<a name="Homecloud+start"></a>
+
+### homecloud.start()
+Starts the client. It logins and then connects the websocket.
+    Just call this function one time.
+
+**Kind**: instance method of <code>[Homecloud](#Homecloud)</code>  
 <a name="Homecloud+newNodes"></a>
 
 ### homecloud.newNodes(nodes, [onSend], [onError])

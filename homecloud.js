@@ -51,13 +51,25 @@ function Homecloud(options) {
     this._notificationHandlers = {
 
     };
-
-    //Connect
-    this._login();
 }
 
 
+
 /* API Functions */
+
+/**
+    Starts the client. It logins and then connects the websocket.
+    Just call this function one time.
+*/
+Homecloud.prototype.start = function() {
+    //Silent ignore wrong call
+    if (this._calledStart)
+        return;
+    
+    //Connect
+    this._calledStart = true;
+    this._login();
+};
 
 /**
     Notificates server of new detected nodes

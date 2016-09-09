@@ -21,6 +21,7 @@ describe('Homecloud', function() {
     before('Instanciation of test Server and homecloud', (done) => {
         testServer.createServer(() => {
             home = new Homecloud(testOptions);
+            home.start();
             done();
         });
     });
