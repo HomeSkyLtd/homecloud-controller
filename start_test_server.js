@@ -9,4 +9,15 @@ testServer.createServer(() => {}, () => {
         nodeId: 0,
         accept: 1
     });
+    setTimeout(() => {
+        testServer.sendNotification({
+            notification: "newAction",
+            action: 
+                {
+                    nodeId: 0,
+                    commandId: 1,
+                    value: 1
+                }
+        });
+    }, 100);
 });
