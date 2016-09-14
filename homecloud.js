@@ -339,22 +339,26 @@ Homecloud.prototype._connectWebSocket = function () {
         this._websocket = new WebSocketClient({});
         this._websocket.on('connectFailed', (error) => {
             console.log('[WEBSOCKET CONN] Error in connection: ');
+            console.log(typeof error);
             console.log(error);
-            if (error.indexOf('Error: Server responded with a non-101 status: 403')) {
-                console.log("[WEBSOCKET CONN] Got 403 status. Logging again...");
-                setTimeout(() => {
-                    if (this._connectionState !== ConnectionState.Disabled) {
-                        this._connectionState = ConnectionState.NotConnected;
-                        this._login();
-                    }
-                }, this._options.retryMessageTime);
+            if (typeof error === 'string') {
+                if (error.indexOf('Error: Server responded with a non-101 status: 403')) {
+                    console.log("[WEBSOCKET CONN] Got 403 status. Logging again...");
+                    setTimeout(() => {
+                        if (this._connectionState !== ConnectionState.Disabled) {
+                            this._connectionState = ConnectionState.NotConnected;
+                            this._login();
+                        }
+                    }, this._options.retryMessageTime);
+                    return;
+                }
             }
-            else {
-                console.log('[WEBSOCKET CONN] Will retry connection in ' +
-                    this._options.websocket.retryConnectionTime + "ms");
-                //Try to reconnect
-                reconnect();
-            }
+            
+            console.log('[WEBSOCKET CONN] Will retry connection in ' +
+                this._options.websocket.retryConnectionTime + "ms");
+            //Try to reconnect
+            reconnect();
+        
 
         });
         this._websocket.on('connect', (connection) => {
