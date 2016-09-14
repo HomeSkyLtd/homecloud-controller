@@ -423,6 +423,8 @@ Homecloud.prototype._sendMessage = function (message, events) {
     }, (data, response) => {
         if (data.status !== 200) {
             console.log("[MESSAGE] Non 200 status received (" + data.status + ") ");
+            if (data.errorMessage)
+                console.log("[MESSAGE] Error: " + data.errorMessage);
             if (data.status === 403 && data.errorMessage === 'User not logged in') {
                 //Logout
                 reconnect();
