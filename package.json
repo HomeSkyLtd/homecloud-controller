@@ -1,6 +1,6 @@
 {
   "name": "homecloud-controller",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "API for the controller communication with the cloud server using the homecloud protocol",
   "main": "homecloud.js",
   "scripts": {
