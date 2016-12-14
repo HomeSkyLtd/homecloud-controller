@@ -374,7 +374,7 @@ Homecloud.prototype._connectWebSocket = function () {
                 reconnect();
             });
             connection.on('message', (rawMessage) => {
-                console.log("[WEBSOCKET CONN] Got Message: " + JSON.stringify(rawMessage));
+                //console.log("[WEBSOCKET CONN] Got Message: " + JSON.stringify(rawMessage));
                 var message = JSON.parse(rawMessage.utf8Data);
 
                 if (message.notification) {
@@ -449,8 +449,8 @@ Homecloud.prototype._sendMessage = function (message, events) {
             
         }
         else {
-            console.log("[MESSAGE] Sent Message");
-            console.log(message);
+            //console.log("[MESSAGE] Sent Message");
+            //console.log(message);
             if (events.onSend)
                 events.onSend(data);
         }
