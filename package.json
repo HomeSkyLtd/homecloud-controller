@@ -38,7 +38,9 @@
     "cookie-parser": "^1.4.3"
   },
   "dependencies": {
+    "colors": "^1.1.2",
     "enum": "^2.3.0",
+    "fs-extra": "^3.0.1",
     "merge": "^1.2.0",
     "request": "^2.74.0",
     "websocket": "^1.0.23"

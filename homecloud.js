@@ -1,9 +1,9 @@
 /*jshint esversion: 6 */
 
-var WebSocketClient = require('websocket').client;
-var request = require('request');
-var merge = require('merge');
-var Enum = require('enum');
+var WebSocketClient = require("websocket").client;
+var request = require("request");
+var merge = require("merge");
+var Enum = require("enum");
 
 /*
     options is in the format:
@@ -28,18 +28,18 @@ const DEFAULT_OPTIONS = {
 };
 
 /* Enum of the state of the connection with the server */
-const ConnectionState = new Enum(['WaitingLogin', 'LoggedIn', 'WaitingTimeout', 
-    'NotConnected', 'CantLogin', 'Disabled']);
+const ConnectionState = new Enum(["WaitingLogin", "LoggedIn", "WaitingTimeout", 
+    "NotConnected", "CantLogin", "Disabled"]);
 /* Enum of the state of the websocket */
-const WebsocketState = new Enum(['Disabled', 'WaitingTimeout', 'WaitingResponse', 'Connected',
-                'NotConnected', 'FirstTry']);
+const WebsocketState = new Enum(["Disabled", "WaitingTimeout", "WaitingResponse", "Connected",
+    "NotConnected", "FirstTry"]);
 
 
 /**
     @class
     @param {Object} options - Server and controller configurations
 */
-function Homecloud(options) {
+function Homecloud(options, logger = null) {
     //Set internal variables
     this._options = merge.recursive(DEFAULT_OPTIONS, options);
     this._connectionState = ConnectionState.NotConnected;
@@ -51,6 +51,8 @@ function Homecloud(options) {
     this._notificationHandlers = {
 
     };
+
+    this._logger = (logger === null)?require("./utils/logger.js").Logger : logger;
 }
 
 
@@ -95,10 +97,10 @@ Homecloud.prototype.newNodes = function(nodes, onSend, onError) {
     @param {Homecloud~OnError} [onError] - Callback to call when the server rejected the message
 */
 Homecloud.prototype.newData = function (dataArray, onSend, onError) {
-	this._sendMessage({
-		function: "newData",
-		data: dataArray
-	}, {
+    this._sendMessage({
+        function: "newData",
+        data: dataArray
+    }, {
         onSend: onSend,
         onError: onError
     });
@@ -112,10 +114,10 @@ Homecloud.prototype.newData = function (dataArray, onSend, onError) {
     @param {Homecloud~OnError} [onError] - Callback to call when the server rejected the message
 */
 Homecloud.prototype.newCommand = function (commandArray, onSend, onError) {
-	this._sendMessage({
-		function: "newCommand",
-		command: commandArray
-	}, {
+    this._sendMessage({
+        function: "newCommand",
+        command: commandArray
+    }, {
         onSend: onSend,
         onError: onError
     });
@@ -247,7 +249,8 @@ Homecloud.prototype._sendRawMessage = function(req, onSend, onError) {
                         onSend(data, response);
                 }
             }
-    });
+        }
+    );
 };
 
 /* Login in the server */
@@ -257,7 +260,7 @@ Homecloud.prototype._login = function() {
     this._connectionState = ConnectionState.WaitingLogin;
     this._cookiesJar = request.jar();
     //Creates cookie jar
-    console.log("[LOGIN] Sending login message");
+    this._logger.verbose("Sending login message");
     this._sendRawMessage({
         options: {
             url: this._options.address,
@@ -270,12 +273,12 @@ Homecloud.prototype._login = function() {
         }
     }, (data, response) => {
         if (data.status !== 200) {
-            console.log("[LOGIN] Login error: '" +
-                (data.errorMessage ? data.errorMessage : '') + "' (status " + data.status + ")");
+            this._logger.debug("Login error: '" +
+                (data.errorMessage ? data.errorMessage : "") + "' (status " + data.status + ")");
             this._connectionState = ConnectionState.CantLogin;
         }
         else {
-            console.log("[LOGIN] Logged in");
+            this._logger.verbose("Logged in successfuly");
             this._connectionState = ConnectionState.LoggedIn;
             //Send stored messages
             this._sendStoredMessages();
@@ -287,15 +290,15 @@ Homecloud.prototype._login = function() {
         if (err !== null) {
             //Connection error: try later
             //Maybe there is no internet
-            console.log("[LOGIN] Couldn't connect to server");
+            this._logger.debug("Couldn't connect to server");
         }
         else if (response.statusCode !== 200) {
             //Server answered but there is some error
             //Like 500 or 404
-            console.log("[LOGIN] Couldn't login: Got status " + response.statusCode);
+            this._logger.debug("Couldn't login: Got status " + response.statusCode);
         }
         //Will try again
-        console.log("[LOGIN] Will retry in " + this._options.retryMessageTime + "ms");
+        this._logger.debug("Will retry in " + this._options.retryMessageTime + "ms");
         setTimeout(() => {
             if (this._connectionState !== ConnectionState.Disabled) {
                 this._connectionState = ConnectionState.NotConnected;
@@ -337,13 +340,11 @@ Homecloud.prototype._connectWebSocket = function () {
         this._websocketState = WebsocketState.NotConnected;
         //Configure webscoket
         this._websocket = new WebSocketClient({});
-        this._websocket.on('connectFailed', (error) => {
-            console.log('[WEBSOCKET CONN] Error in connection: ');
-            console.log(typeof error);
-            console.log(error);
-            if (error.toString().indexOf('Error: Server responded with a non-101 status: 403') !== -1) {
+        this._websocket.on("connectFailed", (error) => {
+            this._logger.debug("Error in websocket connection: " + error.stack);
+            if (error.toString().indexOf("Error: Server responded with a non-101 status: 403") !== -1) {
                 this._websocketState = WebsocketState.NotConnected;
-                console.log("[WEBSOCKET CONN] Got 403 status. Logging again...");
+                this._logger.debug("Got 403 status. Logging again...");
                 setTimeout(() => {
                     if (this._connectionState !== ConnectionState.Disabled) {
                         this._connectionState = ConnectionState.NotConnected;
@@ -352,28 +353,27 @@ Homecloud.prototype._connectWebSocket = function () {
                 }, this._options.retryMessageTime);
                 return;
             }
-            console.log('[WEBSOCKET CONN] Will retry connection in ' +
+            this._logger.debug("Will retry websocket connection in " +
                 this._options.websocket.retryConnectionTime + "ms");
             //Try to reconnect
             reconnect();
         
 
         });
-        this._websocket.on('connect', (connection) => {
+        this._websocket.on("connect", (connection) => {
             //Conected!
-            console.log('[WEBSOCKET CONN] Connected!');
+            this._logger.verbose("Websocket connected!");
             this._websocketState = WebsocketState.Connected;
             this._websocketConnection = connection;
-            connection.on('error', (error) => {
-                console.log("[WEBSOCKET CONN] Connection Error: ");
-                console.log(error);
+            connection.on("error", (error) => {
+                this._logger.debug("[WEBSOCKET CONN] Connection Error: " + error.stack);
                 reconnect();
             });
-            connection.on('close', () => {
-                console.log("[WEBSOCKET CONN] Connection Closed: ");
+            connection.on("close", () => {
+                this._logger.verbose("Websocket connection closed");
                 reconnect();
             });
-            connection.on('message', (rawMessage) => {
+            connection.on("message", (rawMessage) => {
                 //console.log("[WEBSOCKET CONN] Got Message: " + JSON.stringify(rawMessage));
                 var message = JSON.parse(rawMessage.utf8Data);
 
@@ -381,7 +381,7 @@ Homecloud.prototype._connectWebSocket = function () {
                     if (this._notificationHandlers[message.notification])
                         this._notificationHandlers[message.notification](message);
                     else {
-                        console.log("[WEBSOCKET MSG] Message '" + message.notification +
+                        this._logger.debug("Websocket message '" + message.notification +
                             "' without callback");
                     }
                 }
@@ -410,7 +410,7 @@ Homecloud.prototype._sendMessage = function (message, events) {
 
     //Function to reconnect
     var reconnect = () => {
-        console.log('[MESSAGE] Storing message and will login again');
+        this._logger.debug("Storing message and will login again");
         this._msgQueue.push({
             message: message,
             events: events
@@ -435,11 +435,11 @@ Homecloud.prototype._sendMessage = function (message, events) {
         body: message
     }, (data, response) => {
         if (data.status !== 200) {
-            console.log("[MESSAGE] Non 200 status received (" + data.status + ") ");
-            console.log(message);
+            this._logger.debug("Non 200 status received (" + data.status + ") ");
+            this._logger.debug(message);
             if (data.errorMessage)
-                console.log("[MESSAGE] Error: " + data.errorMessage);
-            if (data.status === 403 && data.errorMessage === 'User not logged in') {
+                this._logger.debug("Message error: " + data.errorMessage);
+            if (data.status === 403 && data.errorMessage === "User not logged in") {
                 //Logout
                 reconnect();
             }
@@ -456,11 +456,11 @@ Homecloud.prototype._sendMessage = function (message, events) {
         }
     }, (err, response) => {
         if (err !== null) {
-            console.log("[MESSAGE] Couldn't connect to server");
+            this._logger.debug("Couldn't connect to server");
             reconnect();
         }
         else {
-            console.log("[MESSAGE] Couldn't send message: Got status " + response.statusCode);
+            this._logger.debug("Couldn't send message: Got status " + response.statusCode);
             if (response.statusCode === 403)
                 reconnect();
             else if (events.onError)
@@ -474,14 +474,13 @@ Homecloud.prototype._sendStoredMessages = function () {
     
     var msgs = this._msgQueue;
     this._msgQueue = [];
-    console.log("[STORED MSGS] " + msgs.length + " message(s) to send...");
+    this._logger.debug(msgs.length + " message(s) to send...");
 
     var recursiveSend = (i) => {
         if (i >= msgs.length)
             return;
         this._sendMessage(msgs[i].message, {
             onSend: (...args) => {
-                console.log(args);
                 if (msgs[i].events.onSend)
                     msgs[i].events.onSend.apply(this, args);
                 recursiveSend(i + 1);
