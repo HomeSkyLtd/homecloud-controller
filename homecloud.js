@@ -369,8 +369,22 @@ Homecloud.prototype._connectWebSocket = function () {
                 this._logger.debug("[WEBSOCKET CONN] Connection Error: " + error.stack);
                 reconnect();
             });
-            connection.on("close", () => {
+            connection.on("close", (code, reason) => {
                 this._logger.verbose("Websocket connection closed");
+                if (code === 4403) {
+                    this._websocketState = WebsocketState.NotConnected;
+                    this._logger.debug("Got 403 status. Logging again...");
+                    setTimeout(() => {
+                        if (this._connectionState !== ConnectionState.Disabled) {
+                            this._connectionState = ConnectionState.NotConnected;
+                            this._login();
+                        }
+                    }, this._options.retryMessageTime);
+                    return;
+                }
+                this._logger.debug("Will retry websocket connection in " +
+                    this._options.websocket.retryConnectionTime + "ms");
+                //Try to reconnect
                 reconnect();
             });
             connection.on("message", (rawMessage) => {
